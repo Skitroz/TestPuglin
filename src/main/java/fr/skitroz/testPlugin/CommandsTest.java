@@ -16,6 +16,7 @@ import org.bukkit.entity.Display;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.permissions.PermissionAttachment;
+import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,74 +49,104 @@ public class CommandsTest implements CommandExecutor, TabCompleter {
                     player.sendMessage("Permission enlevée");
                 }
                 return true;
-            } else if (cmd.getName().equalsIgnoreCase("display") && args.length > 0) {
+            } else if (cmd.getName().equalsIgnoreCase("display")) {
                 Location location = player.getLocation();
                 World world = player.getWorld();
 
-                if (args.length >= 3) {
-                    String[] colors = args[2].split(",");
-
-                    ColorDisplay colorEnumeration = ColorDisplay.getColorDisplay(args[2].toUpperCase());
-
-                    int RGB_1;
-                    int RGB_2;
-                    int RGB_3;
-
-                    if (!colorEnumeration.equals(ColorDisplay.NULL)) {
-                        RGB_1 = colorEnumeration.getRGB_1();
-                        RGB_2 = colorEnumeration.getRGB_2();
-                        RGB_3 = colorEnumeration.getRGB_3();
-                    } else {
-                        if (colors.length != 3) {
-                            player.sendMessage("La couleur doit être définie sous forme de 'R,G,B'");
-                            return true;
-                        }
-                        try {
-                            RGB_1 = Integer.parseInt(colors[0]);
-                            RGB_2 = Integer.parseInt(colors[1]);
-                            RGB_3 = Integer.parseInt(colors[2]);
-                        } catch (NumberFormatException e) {
-                            player.sendMessage("Les valeurs RGB doivent être des entiers.");
-                            return true;
-                        }
-                    }
-
-                    if (args.length >= 6) {
-                        try {
-                            double x = Double.parseDouble(args[3]);
-                            double y = Double.parseDouble(args[4]);
-                            double z = Double.parseDouble(args[5]);
-                            location = new Location(world, x, y, z);
-                            player.sendMessage("Coordonnées valides");
-                        } catch (NumberFormatException e) {
-                            player.sendMessage("Les coordonnées fournies ne sont pas valides");
-                            return true;
-                        }
-                    }
-
-                    TextDisplay textDisplay = world.spawn(location, TextDisplay.class);
-                    textDisplay.setText(args[0]);
-                    try {
-                        textDisplay.setBillboard(Display.Billboard.valueOf(args[1].toUpperCase()));
-                    } catch (IllegalArgumentException e) {
-                        player.sendMessage("Type de billboard invalide");
-                        return true;
-                    }
-                    textDisplay.setBackgroundColor(Color.fromRGB(RGB_1, RGB_2, RGB_3));
-
-                    player.sendMessage("Le texte : " + textDisplay.getText() + " a été correctement affiché à la position : " +
-                            "X: " + (int) location.getX() + " Y: " + (int) location.getY() + " Z: " + (int) location.getZ());
-                    return true;
-                } else {
-                    player.sendMessage("Usage incorrect de la commande display.");
+                // Vérification du nombre minimum d'arguments requis
+                if (args.length < 3) {
+                    player.sendMessage("Usage incorrect de la commande display. Format attendu : /display <texte> <billboard> <couleur R,G,B> [x] [y] [z]");
                     return true;
                 }
-            } else if (cmd.getName().equalsIgnoreCase("remove-display")) {
-                Location location = player.getLocation();
-                World world = player.getWorld();
+
+                String[] colors = args[2].split(",");
+
+                ColorDisplay colorEnumeration = ColorDisplay.getColorDisplay(args[2].toUpperCase());
+
+                int RGB_1;
+                int RGB_2;
+                int RGB_3;
+
+                if (!colorEnumeration.equals(ColorDisplay.NULL)) {
+                    RGB_1 = colorEnumeration.getRGB_1();
+                    RGB_2 = colorEnumeration.getRGB_2();
+                    RGB_3 = colorEnumeration.getRGB_3();
+                } else {
+                    if (colors.length != 3) {
+                        player.sendMessage("La couleur doit être définie sous forme de 'R,G,B'");
+                        return true;
+                    }
+                    try {
+                        RGB_1 = Integer.parseInt(colors[0]);
+                        RGB_2 = Integer.parseInt(colors[1]);
+                        RGB_3 = Integer.parseInt(colors[2]);
+                    } catch (NumberFormatException e) {
+                        player.sendMessage("Les valeurs RGB doivent être des entiers.");
+                        return true;
+                    }
+                }
+
+                if (args.length == 6) {
+                    try {
+                        double x = Double.parseDouble(args[3]);
+                        double y = Double.parseDouble(args[4]);
+                        double z = Double.parseDouble(args[5]);
+                        location = new Location(world, x, y, z);
+                        player.sendMessage("Coordonnées valides");
+                    } catch (NumberFormatException e) {
+                        player.sendMessage("Les coordonnées fournies ne sont pas valides");
+                        return true;
+                    }
+                } else if (args.length == 4 || args.length == 5) {
+                    player.sendMessage("Vous devez spécifier les trois coordonnées X, Y et Z.");
+                    return true;
+                }
+
                 TextDisplay textDisplay = world.spawn(location, TextDisplay.class);
-                textDisplay.remove();
-                player.sendMessage("Le texte a été correctement supprimé");
+                textDisplay.setText(args[0]);
+                try {
+                    textDisplay.setBillboard(Display.Billboard.valueOf(args[1].toUpperCase()));
+                } catch (IllegalArgumentException e) {
+                    player.sendMessage("Type de billboard invalide");
+                    return true;
+                }
+                textDisplay.setBackgroundColor(Color.fromRGB(RGB_1, RGB_2, RGB_3));
+
+                player.sendMessage("Le texte : " + textDisplay.getText() + " a été correctement affiché à la position : " +
+                        "X: " + (int) location.getX() + " Y: " + (int) location.getY() + " Z: " + (int) location.getZ());
+                return true;
+            } else if (cmd.getName().equalsIgnoreCase("remove-display")) {
+                Location eyeLocation = player.getEyeLocation();
+                Vector direction = eyeLocation.getDirection().normalize();
+                World world = player.getWorld();
+                double maxDistance = 50.0; // Distance maximale pour détecter les TextDisplays
+                double radius = 0.5; // Rayon autour de chaque point de la trajectoire pour vérifier la présence d'un TextDisplay
+
+                boolean found = false;
+
+                // Parcours de la trajectoire dans la direction du regard du joueur
+                for (double i = 0; i < maxDistance; i += 0.5) {
+                    Location checkLocation = eyeLocation.clone().add(direction.clone().multiply(i));
+
+                    // Parcourt tous les TextDisplays dans le monde
+                    for (TextDisplay textDisplay : world.getEntitiesByClass(TextDisplay.class)) {
+                        // Vérifie si le TextDisplay est dans le rayon autour de la position actuelle
+                        if (textDisplay.getLocation().distance(checkLocation) <= radius) {
+                            textDisplay.remove();
+                            player.sendMessage("Le texte affiché que vous regardiez a été supprimé.");
+                            found = true;
+                            break; // Quitte la boucle une fois qu'un TextDisplay est trouvé et supprimé
+                        }
+                    }
+
+                    if (found) {
+                        break; // Quitte la boucle principale si un TextDisplay a été supprimé
+                    }
+                }
+
+                if (!found) {
+                    player.sendMessage("Aucun texte affiché n'a été trouvé dans votre champ de vision.");
+                }
                 return true;
             }
         }
